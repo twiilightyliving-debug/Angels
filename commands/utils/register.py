@@ -671,12 +671,6 @@ class Register(commands.Cog):
                 opcoes_texto += f"- {nome} → @{data['role_name']}\n"
             opcoes_texto += "\n"
         
-        # Adiciona o campo de opções ao embed
-        embed.add_field(name="", value=opcoes_texto, inline=True)
-        
-        # Adiciona instrução de como usar
-        embed.add_field(name="", value="---\nComo usar\n\nClique em uma opção abaixo para selecionar", inline=True)
-        
         if config["embed_footer"]:
             embed.set_footer(text=config["embed_footer"])
         if config["embed_thumbnail"]:
