@@ -1,13 +1,3 @@
-"""
-prefix_bridge.py
-─────────────────────────────────────────────
-Sistema que permite usar slash commands via prefix (ex: .warn @user motivo)
-Funciona criando uma FakeInteraction que imita o objeto discord.Interaction.
-Adicione no seu main.py:
-    from prefix_bridge import setup_prefix_bridge
-    setup_prefix_bridge(bot)
-"""
-
 import discord
 from discord.ext import commands
 from discord import app_commands
