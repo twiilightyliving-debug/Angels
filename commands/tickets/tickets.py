@@ -163,7 +163,7 @@ class TicketControlView(ui.View):
         # ── Montar o embed IGUAL à print ──
         embed = discord.Embed(
             title="Ticket Closed",
-            color=0x87ceeb
+            color=discord.Color.red()
         )
 
         # Linha 1: Ticket ID | Opened By | Closed By
@@ -191,7 +191,7 @@ class TicketControlView(ui.View):
         )
         embed.add_field(
             name="🔵 Claimed By",
-            value=claimed_by if claimed_by else "@silence",  # fallback para teste
+            value=claimed_by if claimed_by else "@ly in silence",  # fallback para teste
             inline=True
         )
         # Célula vazia para fechar a linha de 3 colunas
@@ -285,19 +285,25 @@ class TicketConfigView(ui.View):
         self.bot = bot
         self.interaction = interaction
         self.guild_id = interaction.guild_id
-        self.config = self.bot.db.ticket_configs.find_one({"guild_id": self.guild_id}) or {
-            "staff_role": None,
-            "category_id": None,
-            "log_channel_id": None,
-            "embed": {
-                "title": "Sistema de Tickets",
-                "description": "Clique no botão abaixo para abrir um ticket!",
-                "color": 0x00ff00,
-                "thumbnail": None,
-                "image": None,
-                "fields": []
-            }
-        }
+        _db_config = self.bot.db.ticket_configs.find_one({"guild_id": self.guild_id}) or {}
+        _db_config.setdefault("staff_role", None)
+        _db_config.setdefault("category_id", None)
+        _db_config.setdefault("log_channel_id", None)
+        _db_config.setdefault("embed", {
+            "title": "Sistema de Tickets",
+            "description": "Clique no botão abaixo para abrir um ticket!",
+            "color": 0x00ff00,
+            "thumbnail": None,
+            "image": None,
+            "fields": []
+        })
+        _db_config["embed"].setdefault("title", "Sistema de Tickets")
+        _db_config["embed"].setdefault("description", "Clique no botão abaixo para abrir um ticket!")
+        _db_config["embed"].setdefault("color", 0x00ff00)
+        _db_config["embed"].setdefault("thumbnail", None)
+        _db_config["embed"].setdefault("image", None)
+        _db_config["embed"].setdefault("fields", [])
+        self.config = _db_config
         self.preview_message = None
 
     async def update_preview(self):
