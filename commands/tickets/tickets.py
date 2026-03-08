@@ -163,7 +163,7 @@ class TicketControlView(ui.View):
         # ── Montar o embed IGUAL à print ──
         embed = discord.Embed(
             title="Ticket Closed",
-            color=discord.Color.red()
+            color=0x87ceeb
         )
 
         # Linha 1: Ticket ID | Opened By | Closed By
