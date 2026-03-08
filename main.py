@@ -13,6 +13,9 @@ import threading
 # Importa o handler de cogs (seu arquivo handler.py)
 from handler import load_cogs
 
+# Importa o sistema de prefix bridge
+from prefix_bridge import setup_prefix_bridge
+
 # ────────────────────────────────────────────────
 # Configuração de logging
 logging.basicConfig(
@@ -99,6 +102,10 @@ class MyBot(commands.Bot):
         # Carrega cogs via handler
         await load_cogs(self)
 
+        # Registra o prefix bridge (converte .comando em slash command)
+        setup_prefix_bridge(self)
+        logger.info("Prefix bridge registrado com sucesso")
+
         # Sincronização dos slash commands
         try:
             synced = await self.tree.sync()
@@ -184,7 +191,7 @@ async def health():
         "status": "healthy" if bot.is_ready() else "starting",
         "bot_online": bot.is_ready(),
         "guilds": len(bot.guilds) if bot.is_ready() else 0,
-        "uptime": "N/A"  # Pode adicionar uptime se quiser
+        "uptime": "N/A"
     }
 
 # ────────────────────────────────────────────────
@@ -212,12 +219,12 @@ async def start_bot():
 def run_webserver():
     try:
         logger.info(f"Iniciando webserver na porta {PORT}...")
-        
+
         # Inicia o bot em um thread separado para não bloquear o webserver
         bot_thread = threading.Thread(target=lambda: asyncio.run(start_bot()), daemon=True)
         bot_thread.start()
         logger.info("Thread do bot iniciada.")
-        
+
         # Roda o webserver com uvicorn
         uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
     except Exception as e:
