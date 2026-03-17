@@ -271,7 +271,6 @@ class UserInfoSelect(discord.ui.Select):
             discord.SelectOption(label="Informações principais", description=f"Dados gerais de {nome_curto}",  emoji="🪪", value="principal"),
             discord.SelectOption(label="Avatar",                 description=f"Avatar de {nome_curto}",        emoji="🖼️", value="avatar"),
             discord.SelectOption(label="Banner",                 description=f"Banner de {nome_curto}",        emoji="🎨", value="banner"),
-            discord.SelectOption(label="Nitro & Boost",          description=f"Nitro/Boost de {nome_curto}",   emoji="💎", value="nitro"),
         ]
         super().__init__(placeholder="Mais informações...", options=opcoes, min_values=1, max_values=1)
 
@@ -290,7 +289,6 @@ class UserInfoSelect(discord.ui.Select):
             "principal": lambda a: embed_principal(a, guild),
             "avatar":    embed_avatar,
             "banner":    embed_banner,
-            "nitro":     embed_nitro,
         }
 
         novo_embed = embeds_map[escolha](self.alvo)
