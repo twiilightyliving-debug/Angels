@@ -92,13 +92,6 @@ def embed_principal(alvo: discord.Member | discord.User, guild: discord.Guild | 
     # Campo vazio para forçar quebra de linha após os dois inline
     embed.add_field(name="\u200b", value="\u200b", inline=True)
 
-    # Insígnias
-    embed.add_field(
-        name="✨ Insígnias",
-        value=get_badges(alvo),
-        inline=False
-    )
-
     # Conta criada
     embed.add_field(
         name="🕰️ Conta criada em",
