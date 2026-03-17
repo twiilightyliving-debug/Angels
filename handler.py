@@ -44,6 +44,7 @@ COGS_ENABLED = {
 
     "utils": [
         "commands.utils.maintenance",
+        "commands.utils.mensagens_cog",
         "commands.utils.color",
         "commands.utils.cargo",
         "commands.utils.register",
@@ -51,6 +52,7 @@ COGS_ENABLED = {
         "commands.utils.verify",
         "commands.utils.votacao",
         "commands.utils.avatar",
+        "commands.utils.userinfo",
         "commands.utils.botinfo",
         "commands.utils.serverinfo",
         "commands.utils.sorteio",
