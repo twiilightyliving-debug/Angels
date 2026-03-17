@@ -186,6 +186,8 @@ class SorteioCog(commands.Cog):
             
             if vencedores:
                 update_data["winners"] = [v.id for v in vencedores]
+                # Salva lista completa de participantes para uso no re-sortear
+                update_data["participants"] = [p.id for p in participantes]
             
             await self.sorteios_coll.update_one(
                 {"_id": doc["_id"]},
@@ -224,7 +226,7 @@ class SorteioCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         premio: str,
-        tempo: str,  # Agora é string em vez de int
+        tempo: str,
         vencedores: app_commands.Range[int, 1, 20] = 1,
         requisitos: Optional[str] = None
     ):
@@ -237,7 +239,6 @@ class SorteioCog(commands.Cog):
             return
 
         try:
-            # Converte o tempo para segundos
             duracao_segundos = parse_tempo(tempo)
         except ValueError as e:
             await interaction.response.send_message(
@@ -246,19 +247,12 @@ class SorteioCog(commands.Cog):
             )
             return
 
-        # Calcula timestamps
         agora = int(time.time())
         end_time = agora + duracao_segundos
-        
-        # Formata o tempo para exibição
         tempo_formatado = formatar_tempo(duracao_segundos)
         
         print(f"📅 Sorteio: {premio} - Duração: {tempo_formatado} ({duracao_segundos}s)")
 
-        # ID curto para exibição
-        id_curto = str(interaction.id)[-6:]
-
-        # Cria embed do sorteio
         embed = discord.Embed(
             title="🎉 SORTEIO ATIVO!",
             description=f"**Prêmio:** {premio}\n**Vencedores:** {vencedores}\n\nReaja com 🎟️ para participar!\n\n**Termina:** <t:{end_time}:R>",
@@ -280,7 +274,6 @@ class SorteioCog(commands.Cog):
         msg = await interaction.channel.send(embed=embed)
         await msg.add_reaction("🎟️")
 
-        # Salva no MongoDB
         doc = {
             "_id": str(msg.id),
             "guild_id": interaction.guild_id,
@@ -304,6 +297,194 @@ class SorteioCog(commands.Cog):
         )
         
         print(f"✅ Sorteio salvo: {msg.id}")
+
+    @app_commands.command(name="re_sortear", description="Sorteia um novo vencedor para um sorteio já finalizado")
+    @app_commands.describe(
+        message_id="ID da mensagem do sorteio (clique com botão direito → Copiar ID)",
+        motivo="Motivo do re-sorteio (ex: vencedor não cumpriu requisitos)",
+        excluir_anteriores="Excluir os vencedores anteriores da nova seleção? (padrão: Sim)"
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def re_sortear(
+        self,
+        interaction: discord.Interaction,
+        message_id: str,
+        motivo: Optional[str] = None,
+        excluir_anteriores: bool = True
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        # Busca o sorteio no banco
+        doc = await self.sorteios_coll.find_one({
+            "_id": message_id,
+            "guild_id": interaction.guild_id
+        })
+
+        if not doc:
+            await interaction.followup.send(
+                "❌ Sorteio não encontrado. Verifique o ID da mensagem.\n"
+                "💡 Para copiar o ID: clique com botão direito na mensagem do sorteio → **Copiar ID**",
+                ephemeral=True
+            )
+            return
+
+        if doc["status"] == "running":
+            await interaction.followup.send(
+                "⏳ Este sorteio ainda está em andamento! Aguarde ele terminar para re-sortear.",
+                ephemeral=True
+            )
+            return
+
+        if doc["status"] == "cancelled":
+            await interaction.followup.send(
+                "❌ Este sorteio foi cancelado e não pode ser re-sorteado.",
+                ephemeral=True
+            )
+            return
+
+        # Busca participantes: tenta da mensagem original primeiro, depois do banco
+        guild = interaction.guild
+        channel = guild.get_channel(doc["channel_id"])
+        participantes_ids = []
+
+        if channel:
+            try:
+                msg_original = await channel.fetch_message(doc["message_id"])
+                for reaction in msg_original.reactions:
+                    if str(reaction.emoji) == "🎟️":
+                        async for user in reaction.users():
+                            if not user.bot:
+                                participantes_ids.append(user.id)
+                        break
+            except (discord.NotFound, discord.Forbidden):
+                # Mensagem deletada — usa lista salva no banco
+                participantes_ids = doc.get("participants", [])
+        else:
+            participantes_ids = doc.get("participants", [])
+
+        if not participantes_ids:
+            await interaction.followup.send(
+                "😢 Não foi possível encontrar participantes para este sorteio.",
+                ephemeral=True
+            )
+            return
+
+        # Filtra vencedores anteriores se solicitado
+        vencedores_anteriores_ids = doc.get("winners", [])
+        candidatos_ids = participantes_ids
+
+        if excluir_anteriores and vencedores_anteriores_ids:
+            candidatos_ids = [uid for uid in participantes_ids if uid not in vencedores_anteriores_ids]
+
+        if not candidatos_ids:
+            await interaction.followup.send(
+                "😢 Não há candidatos elegíveis após excluir os vencedores anteriores.\n"
+                "Use `excluir_anteriores: False` para incluí-los.",
+                ephemeral=True
+            )
+            return
+
+        # Resolve os membros
+        candidatos = []
+        for uid in candidatos_ids:
+            member = guild.get_member(uid)
+            if member:
+                candidatos.append(member)
+
+        if not candidatos:
+            await interaction.followup.send(
+                "😢 Nenhum candidato elegível ainda está no servidor.",
+                ephemeral=True
+            )
+            return
+
+        # Sorteia novo(s) vencedor(es)
+        qtd = min(doc.get("winners_count", 1), len(candidatos))
+        novos_vencedores = random.sample(candidatos, qtd)
+        mencoes = ", ".join(v.mention for v in novos_vencedores)
+
+        # Monta embed do resultado
+        motivo_texto = f"\n**Motivo:** {motivo}" if motivo else ""
+        excluidos_texto = " (anteriores excluídos)" if excluir_anteriores and vencedores_anteriores_ids else ""
+
+        embed_resultado = discord.Embed(
+            title="🔄 RE-SORTEIO REALIZADO!",
+            description=(
+                f"**Prêmio:** {doc['prize']}\n"
+                f"**Novo(s) Vencedor(es):** {mencoes}"
+                f"{motivo_texto}"
+            ),
+            color=0x0a0a0a
+        )
+
+        if doc.get("requirements"):
+            embed_resultado.add_field(
+                name="📋 Requisitos",
+                value=doc["requirements"],
+                inline=False
+            )
+
+        embed_resultado.add_field(
+            name="📊 Informações",
+            value=(
+                f"👥 Candidatos elegíveis: {len(candidatos)}{excluidos_texto}\n"
+                f"🎟️ Total de participantes: {len(participantes_ids)}\n"
+                f"🔁 Re-sorteado por: {interaction.user.mention}"
+            ),
+            inline=False
+        )
+
+        # Link para mensagem original, se ainda existir
+        link_original = f"https://discord.com/channels/{doc['guild_id']}/{doc['channel_id']}/{doc['message_id']}"
+        embed_resultado.add_field(
+            name="🔗 Sorteio Original",
+            value=f"[Clique para ver]({link_original})",
+            inline=False
+        )
+
+        embed_resultado.set_footer(text=f"Sorteio ID: {doc['_id'][:8]}")
+        embed_resultado.timestamp = discord.utils.utcnow()
+
+        # Envia resultado no canal do sorteio original (ou canal atual como fallback)
+        canal_destino = channel if channel else interaction.channel
+        await canal_destino.send(embed=embed_resultado)
+
+        # Atualiza o banco com histórico de re-sorteios
+        historico_entry = {
+            "novos_vencedores": [v.id for v in novos_vencedores],
+            "resorteado_por": interaction.user.id,
+            "motivo": motivo,
+            "excluiu_anteriores": excluir_anteriores,
+            "timestamp": int(time.time())
+        }
+
+        await self.sorteios_coll.update_one(
+            {"_id": message_id},
+            {
+                "$set": {"winners": [v.id for v in novos_vencedores]},
+                "$push": {"historico_resorteios": historico_entry}
+            }
+        )
+
+        await interaction.followup.send(
+            f"✅ Re-sorteio realizado com sucesso! Novo(s) vencedor(es): {mencoes}",
+            ephemeral=True
+        )
+
+        print(f"🔄 Re-sorteio do sorteio {message_id} por {interaction.user} — Vencedores: {[v.id for v in novos_vencedores]}")
+
+    @re_sortear.error
+    async def re_sortear_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "❌ Você precisa da permissão **Gerenciar Servidor** para usar este comando.",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"❌ Erro inesperado: {str(error)}",
+                ephemeral=True
+            )
 
     @app_commands.command(name="sorteios", description="Lista todos os sorteios ativos")
     async def listar_sorteios(self, interaction: discord.Interaction):
