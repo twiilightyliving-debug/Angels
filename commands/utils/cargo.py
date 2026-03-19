@@ -524,46 +524,55 @@ class Cargo(commands.Cog):
 
             embed = self.cog.create_preview_embed(self.guild_id)
             view = EditCargoConfigView(self.cog, interaction, self.guild_id)
-            await interaction.response.edit_message(embed=embed, view=view)
+
+            try:
+                await interaction.response.edit_message(embed=embed, view=view)
+            except discord.NotFound:
+                await interaction.response.send_message(
+                    "✅ Configuração salva!", embed=embed, view=view, ephemeral=True
+                )
 
     # ── Comandos slash ──────────────────────────────────────────────────────────
 
     @app_commands.command(name="config_cargo", description="Configura os cargos do painel (Admin)")
     @app_commands.default_permissions(administrator=True)
     async def config_cargo(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id)
         embed = self.create_preview_embed(guild_id)
         view = CargoConfigView(self, interaction)
-        await interaction.response.send_message("⚙️ **Configuração dos Cargos**", embed=embed, view=view, ephemeral=True)
+        await interaction.followup.send("⚙️ **Configuração dos Cargos**", embed=embed, view=view, ephemeral=True)
 
     @app_commands.command(name="painel_cargo", description="Envia o painel de cargos no canal atual (Admin)")
     @app_commands.default_permissions(administrator=True)
     async def painel_cargo(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id)
 
         if guild_id not in self.roles_cargos or not self.roles_cargos[guild_id]:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "❌ Não há cargos configurados! Use `/config_cargo` para adicionar.", ephemeral=True
             )
             return
 
         if not interaction.guild.me.guild_permissions.manage_roles:
-            await interaction.response.send_message("❌ Preciso da permissão `Gerenciar Cargos`!", ephemeral=True)
+            await interaction.followup.send("❌ Preciso da permissão `Gerenciar Cargos`!", ephemeral=True)
             return
 
         view = PainelCargoView(self, interaction.guild_id)
         embed = self.create_preview_embed(guild_id)
         await interaction.channel.send(embed=embed, view=view)
-        await interaction.response.send_message("✅ Painel de cargos enviado com sucesso!", ephemeral=True)
+        await interaction.followup.send("✅ Painel de cargos enviado com sucesso!", ephemeral=True)
 
     @app_commands.command(name="editar_cargo", description="Edita a aparência do painel de cargos (Admin)")
     @app_commands.default_permissions(administrator=True)
     async def editar_cargo(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id)
         self.get_guild_config(guild_id)  # garante que a config existe
         view = EditCargoConfigView(self, interaction, guild_id)
         embed = self.create_preview_embed(guild_id)
-        await interaction.response.send_message("🎨 **Editar Aparência do Painel de Cargos**", embed=embed, view=view, ephemeral=True)
+        await interaction.followup.send("🎨 **Editar Aparência do Painel de Cargos**", embed=embed, view=view, ephemeral=True)
 
 
 async def setup(bot):
