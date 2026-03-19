@@ -15,7 +15,7 @@ class AddCargoModal(Modal, title="Adicionar Cargo por ID"):
 
     nome_exibicao = TextInput(
         label="Nome de exibição",
-        placeholder="Como o cargo vai aparecer no painel",
+        placeholder="Ex: <:flamengo:123456789> Flamengo",
         required=True,
         max_length=50
     )
@@ -51,10 +51,13 @@ class RemoveCargoSelect(Select):
         options = []
         for nome_exibicao, role_data in roles_dict.items():
             role_name = role_data.get('role_name', 'Cargo desconhecido')
+            # Remove emojis personalizados do label do SelectOption (Discord não suporta em labels)
+            # mas mantém no banco de dados para o embed
+            label_limpo = _strip_custom_emojis(nome_exibicao)
             options.append(discord.SelectOption(
-                label=nome_exibicao,
-                description=f"Cargo: {role_name}",
-                value=nome_exibicao
+                label=label_limpo[:100],
+                description=f"Cargo: {role_name}"[:100],
+                value=nome_exibicao[:100]
             ))
 
         if not options:
@@ -79,6 +82,18 @@ class RemoveCargoSelect(Select):
 
         nome_exibicao = self.values[0]
         await self.cog.remove_cargo_role(interaction, nome_exibicao)
+
+
+def _strip_custom_emojis(text: str) -> str:
+    """
+    Remove emojis personalizados do Discord (<:nome:id> e <a:nome:id>) de uma string.
+    Usado para limpar labels de SelectOption, que não suportam esse formato.
+    Mantém emojis Unicode normais (✅, ❌, etc).
+    """
+    import re
+    # Remove <:nome:id> e <a:nome:id>
+    cleaned = re.sub(r'<a?:\w+:\d+>', '', text).strip()
+    return cleaned if cleaned else text  # fallback para o original se ficar vazio
 
 
 # View de configuração dos cargos (para /config_cargo)
@@ -133,10 +148,13 @@ class UserCargoSelect(Select):
 
         for nome_exibicao, role_data in guild_roles.items():
             role_name = role_data.get('role_name', 'Cargo')
+            # Labels de SelectOption não suportam emojis personalizados — removemos do label
+            # mas o nome completo (com emoji) fica visível no embed
+            label_limpo = _strip_custom_emojis(nome_exibicao)
             options.append(discord.SelectOption(
-                label=nome_exibicao,
-                description=f"Cargo: {role_name}",
-                value=nome_exibicao
+                label=label_limpo[:100],
+                description=f"Cargo: {role_name}"[:100],
+                value=nome_exibicao[:100]
             ))
 
         if not options:
@@ -220,7 +238,7 @@ class EditCargoConfigView(View):
     @discord.ui.button(label="Título", style=discord.ButtonStyle.primary, custom_id="cargo_edit_title_btn")
     async def edit_title(self, interaction: discord.Interaction, button: Button):
         modal = self.cog.EditCargoConfigModal(
-            self.cog, "title", "Editar Título", "Novo título:",
+            self.cog, "title", "Editar Título", "Novo título (emojis: <:nome:id>):",
             interaction, self.cog.embed_configs[self.guild_id]["embed_title"], self.guild_id
         )
         await interaction.response.send_modal(modal)
@@ -228,7 +246,7 @@ class EditCargoConfigView(View):
     @discord.ui.button(label="Descrição", style=discord.ButtonStyle.primary, custom_id="cargo_edit_desc_btn")
     async def edit_description(self, interaction: discord.Interaction, button: Button):
         modal = self.cog.EditCargoConfigModal(
-            self.cog, "description", "Editar Descrição", "Nova descrição:",
+            self.cog, "description", "Editar Descrição", "Nova descrição (emojis: <:nome:id>):",
             interaction, self.cog.embed_configs[self.guild_id]["embed_description"], self.guild_id
         )
         await interaction.response.send_modal(modal)
@@ -237,7 +255,7 @@ class EditCargoConfigView(View):
     async def edit_color(self, interaction: discord.Interaction, button: Button):
         current = f"{self.cog.embed_configs[self.guild_id]['embed_color']:06X}"
         modal = self.cog.EditCargoConfigModal(
-            self.cog, "color", "Editar Cor", "Nova cor (hex):",
+            self.cog, "color", "Editar Cor", "Nova cor (hex, ex: 5865F2):",
             interaction, current, self.guild_id
         )
         await interaction.response.send_modal(modal)
@@ -245,7 +263,7 @@ class EditCargoConfigView(View):
     @discord.ui.button(label="Footer", style=discord.ButtonStyle.primary, custom_id="cargo_edit_footer_btn")
     async def edit_footer(self, interaction: discord.Interaction, button: Button):
         modal = self.cog.EditCargoConfigModal(
-            self.cog, "footer", "Editar Footer", "Novo footer:",
+            self.cog, "footer", "Editar Footer", "Novo footer (emojis: <:nome:id>):",
             interaction, self.cog.embed_configs[self.guild_id]["embed_footer"], self.guild_id
         )
         await interaction.response.send_modal(modal)
@@ -446,6 +464,7 @@ class Cargo(commands.Cog):
             cargos_lista = []
             for nome_exibicao, role_data in self.roles_cargos[guild_id].items():
                 role_name = role_data.get('role_name', 'Cargo desconhecido')
+                # nome_exibicao pode conter emojis personalizados — o embed renderiza normalmente
                 cargos_lista.append(f"**{nome_exibicao}** → `@{role_name}`")
 
             embed.add_field(
@@ -477,11 +496,15 @@ class Cargo(commands.Cog):
             self.field = field
             self.interaction = interaction
             self.guild_id = guild_id
+
+            # Campos de texto longo usam parágrafo; cor e URLs usam linha única
+            is_long = field in ["description", "footer", "title"]
             self.input = TextInput(
                 label=label,
                 default=current_value,
                 required=True,
-                style=discord.TextStyle.paragraph if field in ["description", "footer"] else discord.TextStyle.short
+                max_length=256 if field == "title" else 4000 if field == "description" else 2048,
+                style=discord.TextStyle.paragraph if is_long else discord.TextStyle.short
             )
             self.add_item(self.input)
 
@@ -544,4 +567,4 @@ class Cargo(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Cargo(bot))sad
+    await bot.add_cog(Cargo(bot))
