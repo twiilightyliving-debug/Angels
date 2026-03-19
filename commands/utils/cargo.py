@@ -389,15 +389,7 @@ class Cargo(commands.Cog):
     def create_preview_embed(self, guild_id):
         cfg = self.get_guild_config(guild_id)
 
-        descricao = cfg["embed_description"]
-        roles = self.roles_cargos.get(guild_id, {})
-        if roles:
-            linhas = [f"**{nome}** → `@{d['role_name']}`" for nome, d in roles.items()]
-            descricao += "\n\n**Cargos Disponíveis**\n" + "\n".join(linhas)
-        else:
-            descricao += "\n\n*Nenhum cargo configurado neste servidor*"
-
-        embed = discord.Embed(title=cfg["embed_title"], description=descricao, color=cfg["embed_color"])
+        embed = discord.Embed(title=cfg["embed_title"], description=cfg["embed_description"], color=cfg["embed_color"])
         if cfg["embed_footer"]:    embed.set_footer(text=cfg["embed_footer"])
         if cfg["embed_thumbnail"]: embed.set_thumbnail(url=cfg["embed_thumbnail"])
         if cfg["embed_image"]:     embed.set_image(url=cfg["embed_image"])
