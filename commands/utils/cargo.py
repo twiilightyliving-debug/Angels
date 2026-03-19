@@ -13,6 +13,21 @@ def _strip_custom_emojis(text: str) -> str:
     return cleaned if cleaned else text
 
 
+def _extract_emoji(text: str):
+    """Extrai o primeiro emoji personalizado de uma string e retorna (emoji_obj, texto_sem_emoji).
+    Se não houver emoji personalizado, retorna (None, texto_original).
+    """
+    match = re.search(r'<(a?):(\w+):(\d+)>', text)
+    if match:
+        animated = match.group(1) == 'a'
+        name = match.group(2)
+        emoji_id = int(match.group(3))
+        emoji_obj = discord.PartialEmoji(name=name, id=emoji_id, animated=animated)
+        label = re.sub(r'<a?:\w+:\d+>', '', text).strip()
+        return emoji_obj, label if label else name
+    return None, text
+
+
 # ── Modais ────────────────────────────────────────────────────────────────────
 
 class AddCargoModal(Modal, title="Adicionar Cargo por ID"):
@@ -119,12 +134,15 @@ class RemoveCargoSelect(Select):
         self.original_message = original_message
         options = []
         for nome, role_data in roles_dict.items():
-            label = _strip_custom_emojis(nome)
-            options.append(discord.SelectOption(
+            emoji_obj, label = _extract_emoji(nome)
+            opt = discord.SelectOption(
                 label=label[:100],
                 description=f"Cargo: {role_data.get('role_name', '?')}"[:100],
                 value=nome[:100]
-            ))
+            )
+            if emoji_obj:
+                opt.emoji = emoji_obj
+            options.append(opt)
 
         if not options:
             options.append(discord.SelectOption(label="Nenhum cargo configurado", value="none", default=True))
@@ -242,12 +260,15 @@ class UserCargoSelect(Select):
         options = []
 
         for nome, role_data in cog.roles_cargos.get(str(guild_id), {}).items():
-            label = _strip_custom_emojis(nome)
-            options.append(discord.SelectOption(
+            emoji_obj, label = _extract_emoji(nome)
+            opt = discord.SelectOption(
                 label=label[:100],
                 description=f"Cargo: {role_data.get('role_name', 'Cargo')}"[:100],
                 value=nome[:100]
-            ))
+            )
+            if emoji_obj:
+                opt.emoji = emoji_obj
+            options.append(opt)
 
         if not options:
             options.append(discord.SelectOption(label="Nenhum cargo disponível", value="none", default=True))
